@@ -91,8 +91,7 @@
     content:"";position:absolute;inset:5px;border:1px solid rgba(205,198,182,.6);border-radius:7px;
   }
   .back svg{width:46%;max-width:150px;color:var(--ink);}
-  .back .title{font-size:24px;letter-spacing:.26em;padding-left:.26em;}
-  .back .en{font-family:Georgia,serif;font-size:10px;letter-spacing:.4em;color:var(--ink-soft);text-transform:uppercase;padding-left:.4em;}
+  .back .back-title{font-family:Georgia,"Times New Roman",serif;font-size:23px;line-height:1.32;letter-spacing:.16em;text-align:center;color:var(--ink);padding-left:.16em;}
   .hint{
     position:absolute;bottom:18px;left:0;right:0;text-align:center;
     font-size:12px;letter-spacing:.2em;color:var(--ink-soft);
@@ -155,11 +154,8 @@
           <circle cx="50" cy="56" r="4"/>
           <path d="M50 92 q-10 4 -16 -2 M50 104 q11 4 17 -3"/>
         </svg>
-        <div>
-          <div class="title">識 愛</div>
-        </div>
-        <div class="en">Draw a card</div>
-        <div class="hint" id="hint">點擊抽卡</div>
+        <div class="back-title">Practice<br>of Loving</div>
+        <div class="hint" id="hint">點擊抽卡 · Tap to draw</div>
       </div>
       <div class="face front">
         <img id="cardImg" alt="識愛卡片" />
@@ -168,8 +164,8 @@
   </div>
 
   <div class="controls">
-    <button id="drawBtn">抽一張</button>
-    <button id="shuffleBtn" class="ghost">重新洗牌</button>
+    <button id="drawBtn">抽一張 · Draw</button>
+    <button id="shuffleBtn" class="ghost">重新洗牌 · Shuffle</button>
   </div>
   <div class="meta" id="meta">整副牌 28 張 · 尚未抽出</div>
 
@@ -211,7 +207,7 @@
     shuffle(); drawn=0; current=null;
     stage.classList.remove("flipped");
     stage.classList.add("idle");
-    drawBtn.textContent="抽一張";
+    drawBtn.textContent="抽一張 · Draw";
     meta.innerHTML="整副牌 "+TOTAL+" 張 · 尚未抽出";
   }
 
@@ -243,7 +239,7 @@
       stage.classList.remove("dealing");
       stage.classList.add("flipped");
       meta.innerHTML="第 <span class='num'>"+pad(current)+"</span> 張 · 本輪已抽 "+drawn+" / "+TOTAL;
-      drawBtn.textContent = deck.length>0 ? "再抽一張" : "已抽完 · 可洗牌";
+      drawBtn.textContent = deck.length>0 ? "再抽一張 · Draw Again" : "已抽完 · Finished";
       busy=false;
     }, 420);
   }
