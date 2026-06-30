@@ -43,6 +43,7 @@
   .card{
     position:absolute;inset:0;
     transform-style:preserve-3d;
+    will-change:transform;
     transition:transform .55s cubic-bezier(.2,.9,.25,1);
   }
   .stage.flipped .card{transform:rotateY(180deg);}
@@ -155,7 +156,7 @@
   <div class="stage" id="stage" role="button" aria-label="抽一張卡" tabindex="0">
     <div class="card" id="card">
       <div class="face back">
-        <img class="cover-art" src="cards/00.png" alt="" />
+        <img class="cover-art" src="cards/00.webp" alt="" />
         <div class="frame"></div>
         <div class="hint" id="hint">點擊抽卡 · Tap to draw</div>
       </div>
@@ -181,8 +182,8 @@
   var TOTAL = 28;
   var pad = function(n){ return (n<10?"0":"")+n; };
   var images = [];
-  for(var i=1;i<=TOTAL;i++) images.push("cards/"+pad(i)+".png");
-  images.forEach(function(src){ var im=new Image(); im.src=src; if(im.decode){ im.decode().catch(function(){}); } }); // 預載 + 先解碼
+  for(var i=1;i<=TOTAL;i++) images.push("cards/"+pad(i)+".webp");
+  images.forEach(function(src){ var im=new Image(); im.src=src; }); // 預載（圖已壓成小 webp，解碼極快）
 
   var stage=document.getElementById("stage");
   var front=document.querySelector(".front");
@@ -217,7 +218,7 @@
   }
 
   function setImage(n){
-    var src="cards/"+pad(n)+".png";
+    var src="cards/"+pad(n)+".webp";
     cardImg.src=src;
     cardBg.style.backgroundImage="url('"+src+"')";
   }
@@ -260,7 +261,7 @@
       setTimeout(function(){ busy=false; }, FLIP);
     };
     if(cardImg.decode){ cardImg.decode().then(go).catch(go); }
-    setTimeout(go, 500); // 後備：正常情況 decode 早已完成，這只在 decode 無回應時保命
+    setTimeout(go, 4000); // 後備純防卡死：webp 很小、decode 幾乎瞬間完成，不會搶先翻面（修 b：不再先閃舊圖）
   }
 
   function reset(){
