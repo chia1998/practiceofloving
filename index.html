@@ -43,7 +43,7 @@
   .card{
     position:absolute;inset:0;
     transform-style:preserve-3d;
-    transition:transform .8s cubic-bezier(.2,.9,.25,1);
+    transition:transform .55s cubic-bezier(.2,.9,.25,1);
   }
   .stage.flipped .card{transform:rotateY(180deg);}
 
@@ -140,6 +140,8 @@
   button:active{transform:translateY(1px);}
   button.ghost{border-color:var(--line);color:var(--ink-soft);font-size:12px;padding:9px 15px;}
   button.ghost:hover{background:var(--line);color:var(--ink);}
+  button.icon{font-size:17px;line-height:1;padding:8px 14px;}
+  button.disabled{opacity:.3;pointer-events:none;}
 </style>
 </head>
 <body>
@@ -168,6 +170,7 @@
   <div class="controls" id="controls">
     <div class="meta" id="meta">整副牌 28 張 · 尚未抽出 · Deck of 28, not started</div>
     <div class="btns">
+      <button id="backBtn" class="ghost icon" aria-label="回上一張 Back" title="回上一張 Back">↩&#xFE0E;</button>
       <button id="drawBtn">抽一張 · Draw</button>
       <button id="shuffleBtn" class="ghost">洗牌 · Shuffle</button>
     </div>
@@ -179,18 +182,22 @@
   var pad = function(n){ return (n<10?"0":"")+n; };
   var images = [];
   for(var i=1;i<=TOTAL;i++) images.push("cards/"+pad(i)+".png");
-  images.forEach(function(src){ var im=new Image(); im.src=src; }); // preload
+  images.forEach(function(src){ var im=new Image(); im.src=src; if(im.decode){ im.decode().catch(function(){}); } }); // 預載 + 先解碼
 
   var stage=document.getElementById("stage");
+  var front=document.querySelector(".front");
   var cardImg=document.getElementById("cardImg");
   var cardBg=document.getElementById("cardBg");
   var meta=document.getElementById("meta");
   var drawBtn=document.getElementById("drawBtn");
+  var backBtn=document.getElementById("backBtn");
   var shuffleBtn=document.getElementById("shuffleBtn");
   var intro=document.getElementById("intro");
-  var controls=document.getElementById("controls");
 
-  var deck=[], drawn=0, current=null, busy=false, introGone=false;
+  var deck=[];          // 未抽的牌（已洗）
+  var hist=[];          // 本輪已抽出的牌（依序）
+  var pos=-1;           // 目前顯示的是 hist 的哪一張（-1 = 還沒抽，顯示封面）
+  var busy=false, introGone=false;
 
   function hideIntro(){
     if(introGone) return;
@@ -209,47 +216,88 @@
     }
   }
 
-  function reset(){
-    shuffle(); drawn=0; current=null;
-    stage.classList.remove("flipped");
-    drawBtn.textContent="抽一張 · Draw";
-    meta.innerHTML="整副牌 "+TOTAL+" 張 · 尚未抽出 · Deck of "+TOTAL+", not started";
-  }
-
-  function draw(){
-    if(busy) return;
-    hideIntro(); // 一開始抽牌，開場字就不再出現
-
-    if(stage.classList.contains("flipped")){
-      busy=true;
-      stage.classList.remove("flipped");
-      setTimeout(function(){ busy=false; draw(); }, 480);
-      return;
-    }
-
-    if(deck.length===0){
-      meta.innerHTML="這副牌已抽完 "+TOTAL+" 張 · 點「洗牌」再來一輪 · All "+TOTAL+" drawn — shuffle to restart";
-      return;
-    }
-
-    busy=true;
-    current=deck.pop();
-    drawn++;
-    var src="cards/"+pad(current)+".png";
+  function setImage(n){
+    var src="cards/"+pad(n)+".png";
     cardImg.src=src;
     cardBg.style.backgroundImage="url('"+src+"')";
-
-    setTimeout(function(){
-      stage.classList.add("flipped");
-      meta.innerHTML="第 <span class='num'>"+pad(current)+"</span> 張 · 本輪已抽 "+drawn+" / "+TOTAL+" · Card "+pad(current)+", "+drawn+"/"+TOTAL+" drawn";
-      drawBtn.textContent = deck.length>0 ? "再抽一張 · Draw" : "已抽完 · Done";
-      busy=false;
-    }, 80);
   }
 
-  stage.addEventListener("click", draw);
-  stage.addEventListener("keydown", function(e){ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); draw(); }});
-  drawBtn.addEventListener("click", function(e){ e.stopPropagation(); draw(); });
+  function updateUI(){
+    if(pos<0){
+      meta.innerHTML="整副牌 "+TOTAL+" 張 · 尚未抽出 · Deck of "+TOTAL+", not started";
+      drawBtn.textContent="抽一張 · Draw";
+    } else {
+      var n=hist[pos];
+      meta.innerHTML="第 <span class='num'>"+pad(n)+"</span> 張 · 本輪已抽 "+hist.length+" / "+TOTAL+" · Card "+pad(n)+", "+hist.length+"/"+TOTAL+" drawn";
+      drawBtn.textContent = (pos<hist.length-1) ? "下一張 · Next"
+                          : (deck.length>0 ? "再抽一張 · Draw" : "已抽完 · Done");
+    }
+    backBtn.classList.toggle("disabled", pos<=0);  // 第一張或封面時，無法再往回
+  }
+
+  // 顯示第 n 張卡（保留翻牌動畫；確保換圖在「正面看不見」時、且新圖解碼後才翻回正面，避免閃到上一張）
+  var FLIP=550; // 須與 CSS .card transition 時間一致
+  function flipTo(n){
+    busy=true;
+    if(stage.classList.contains("flipped")){
+      stage.classList.remove("flipped");           // 先翻回封面（此時正面背對使用者）
+      setTimeout(function(){
+        setImage(n); updateUI();                    // 在封面朝外、正面看不見時換圖
+        revealFront();                              // 解碼完成後再翻出正面
+      }, FLIP);
+    } else {
+      setImage(n); updateUI();
+      revealFront();
+    }
+  }
+
+  // 等新圖解碼好再翻到正面，杜絕翻回來時還停留在舊圖；加後備 timeout 防止任何情況卡死
+  function revealFront(){
+    var done=false;
+    var go=function(){
+      if(done) return; done=true;
+      stage.classList.add("flipped");
+      setTimeout(function(){ busy=false; }, FLIP);
+    };
+    if(cardImg.decode){ cardImg.decode().then(go).catch(go); }
+    setTimeout(go, 500); // 後備：正常情況 decode 早已完成，這只在 decode 無回應時保命
+  }
+
+  function reset(){
+    shuffle(); hist=[]; pos=-1;
+    stage.classList.remove("flipped");
+    updateUI();
+  }
+
+  // 下一張：若曾往回，先沿歷史前進；否則從牌堆抽新的一張
+  function next(){
+    if(busy) return;
+    hideIntro();
+    if(pos < hist.length-1){
+      pos++;
+      flipTo(hist[pos]);
+    } else if(deck.length>0){
+      var c=deck.pop(); hist.push(c); pos=hist.length-1;
+      flipTo(c);
+    } else {
+      meta.innerHTML="這副牌已抽完 "+TOTAL+" 張 · 點「洗牌」再來一輪 · All "+TOTAL+" drawn — shuffle to restart";
+    }
+  }
+
+  // 回上一張（不小心點到下一張時可以救回）
+  function back(){
+    if(busy || pos<=0) return;
+    pos--;
+    flipTo(hist[pos]);
+  }
+
+  stage.addEventListener("click", next);
+  stage.addEventListener("keydown", function(e){
+    if(e.key==="Enter"||e.key===" "||e.key==="ArrowRight"){ e.preventDefault(); next(); }
+    else if(e.key==="ArrowLeft"||e.key==="Backspace"){ e.preventDefault(); back(); }
+  });
+  drawBtn.addEventListener("click", function(e){ e.stopPropagation(); next(); });
+  backBtn.addEventListener("click", function(e){ e.stopPropagation(); back(); });
   shuffleBtn.addEventListener("click", function(e){ e.stopPropagation(); reset(); });
 
   reset();
